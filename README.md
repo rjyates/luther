@@ -1,63 +1,91 @@
-# Luther
+<p align="center"><img src="docs/assets/banner.svg" alt="Luther — A local research library with optional AI assistance." width="100%"></p>
 
-Luther is a private, local medieval-history research library. It organizes uploaded journal PDFs as **Journal → Volume → Issue → Article**, extracts their text, and can use a local Ollama model to produce structured summaries, classifications, limitations, and carefully qualified research opportunities.
+[Regan Yates](https://github.com/rjyates) · [Homelab](https://github.com/rjyates/homelab)
 
-There are no subscriptions, cloud services, user accounts, or paid APIs. The PDFs, extracted text, and database stay on the computer running Luther.
 
-## The simple setup
+# Research context, kept close to its sources
 
-Luther needs only:
+Luther is a personal research tool built around a medieval-history workflow. It organizes journal articles, extracts text from uploaded PDFs, and provides a searchable local collection. Optional Ollama analysis adds summaries, classifications, and carefully labeled research opportunities.
 
-1. [Python 3.12](https://www.python.org/downloads/) — free and required.
-2. [Ollama](https://ollama.com/) — free and optional, but required for automatic summaries and classification.
+The central design principle: **an omission in one article is not evidence of a gap in the wider literature**. Generated suggestions are starting points for a researcher's review, not verified scholarly findings.
 
-On Windows, open PowerShell in this folder and run:
+**Status:** implemented local prototype. The non-AI workflow was verified with synthetic material on October 22, 2026. Model quality, scholarly accuracy, and production security are not certified.
+
+## See the workflow
+
+![Luther overview using synthetic data](docs/images/overview-synthetic.png)
+
+*All visible records are fictional demonstration material. No model inference was run for these screenshots; articles correctly remain “needs analysis.”*
+
+[Library view](docs/images/library-synthetic.png) · [Search results](docs/images/search-synthetic.png) · [Architecture & case study](docs/architecture.md) · [Verification](docs/verification.md)
+
+## Implemented capabilities
+
+- **Journal → Volume → Issue → Article** organization.
+- PDF and ZIP ingestion, text extraction, basic metadata heuristics, and local PDF access.
+- SQLite full-text search, with theme/geography filters once classifications exist.
+- Optional local Ollama summaries, keywords, classifications, and research-opportunity labels.
+- Separation of author-identified gaps, article limitations, and potential AI-inferred gaps.
+- Research-question storage and a browser interface for the library and article views.
+
+## Quick start — Windows
+
+Install Python **3.12** with the Python launcher, then run from the repository root:
 
 ```powershell
 .\install.ps1
 .\start.ps1
 ```
 
-The first command creates a private Python environment inside this folder and installs the PDF/web libraries. The second starts Luther at <http://127.0.0.1:8000>. Nothing is exposed to the internet or the local network.
+The installer creates `.venv` and installs the pinned dependencies in [requirements.txt](requirements.txt). The launcher binds the app to **127.0.0.1:8000**. Open that address in your browser; stop the console with Ctrl+C.
 
-For local AI analysis, install Ollama and run once:
+For optional analysis, install Ollama, make a compatible model available, and keep Ollama running. The current UI defaults to `qwen3:8b`; PDF ingestion and search work without it. Model downloads and inference need additional disk, memory, and compute capacity.
 
-```powershell
-ollama pull qwen3:8b
+## First use
+
+1. Create a journal, then add a volume/issue.
+2. Upload a PDF, multiple PDFs, or a ZIP containing PDFs you are authorized to use.
+3. Leave local analysis unchecked to begin with extraction only.
+4. Browse the library or search the extracted text.
+5. If using Ollama, review generated analysis against the original PDF.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI[Browser interface] --> API[FastAPI]
+    API --> PDFs[Local PDF storage]
+    API --> Extract[PyMuPDF extraction]
+    Extract --> DB[SQLite and FTS5]
+    API <--> DB
+    API -. optional .-> AI[Local Ollama]
+    AI -. proposed analysis .-> API
 ```
 
-The model download is several gigabytes. A computer with at least 16 GB of RAM is recommended for this model. PDF upload and text extraction work without Ollama; those articles will show **Needs analysis** until Ollama is available.
+The application uses a small local service and database rather than a distributed stack. [Read the design decisions and limitations →](docs/architecture.md)
 
-## First workflow
+## Source map
 
-1. Create a journal.
-2. Add a volume and issue.
-3. Open the issue and upload one PDF, multiple PDFs, or one ZIP containing PDFs.
-4. Select **Analyze now with local Ollama**, or analyze each article later.
-5. Review the summary, classification, source evidence, and cautiously worded research opportunities.
+| File | Responsibility |
+| :--- | :--- |
+| [luther/main.py](luther/main.py) | API, ingestion, search, and static UI delivery |
+| [luther/analyzer.py](luther/analyzer.py) | PDF extraction, metadata heuristics, and optional model request |
+| [luther/schema.sql](luther/schema.sql) | Relational data model, FTS5 index, and triggers |
+| [luther/db.py](luther/db.py) | SQLite connections and transaction handling |
+| [static/](static/) | Browser UI and styling |
 
-Luther never treats an omission in one article as proof of a gap in the wider scholarly literature. AI-inferred opportunities are labeled provisional and require verification.
+## Data, privacy, and recovery
 
-## Moving Luther to another computer
+Runtime records live in `data/luther.db`; uploaded PDFs live in `data/uploads/`. These paths are excluded from Git. **Public source code does not make a user's research collection public.** Git exclusions are not encryption or access controls.
 
-Copy this entire folder to the other Windows computer, including the `data` folder. Then run `install.ps1` on that computer. The portable collection consists of:
+The supplied launcher is intended for trusted local use. The current app has no user-authentication layer; do not treat it as an internet-ready service. The model request sends extracted article text to the configured local Ollama endpoint, not a hosted AI API.
 
-- `data/luther.db` — all metadata and analysis.
-- `data/uploads/` — private original PDFs.
+Stop Luther before making a private copy of the complete `data/` directory. Copying source alone does not back up the collection. Test recovery separately before relying on a backup.
 
-Do not share the `data` folder publicly; uploaded articles may be copyrighted.
+## Known limits and future work
 
-## Backups
-
-Stop Luther, then copy the entire `data` folder to a private backup drive. Restoring that folder restores the collection.
-
-## Project layout
-
-- `luther/main.py` — local API and ingestion workflow.
-- `luther/schema.sql` — SQLite data model and full-text search.
-- `luther/analyzer.py` — PDF extraction and optional Ollama analysis.
-- `static/` — the scholarly desktop-first interface.
-- `data/` — local database and private uploads (not committed to Git).
-
-API documentation is available locally at <http://127.0.0.1:8000/api/docs> while Luther is running.
-
+- Metadata extraction is heuristic; scanned/image-only PDFs do not gain OCR from the current extractor.
+- Model requests use a bounded text excerpt; results can omit material or be incorrect.
+- Prompts ask for evidence and cautious language, but do not guarantee factual grounding or correct citations.
+- No production multi-user authentication, automated backup policy, or scholarly validation is claimed.
+- More robust model-output validation, ingestion limits, repeatable regression tests, and recovery testing are useful next steps, not completed features.
